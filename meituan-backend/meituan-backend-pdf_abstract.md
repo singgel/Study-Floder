@@ -95,14 +95,81 @@
 jcmd 272662 VM.native_memory detail
 如果 total 中的 committed 和 top 中的 RES 相差不大，则应为主动申请的堆外内存
 未释放造成的，如果相差较大，则基本可以确定是 JNI 调用造成的
+
+原因一：主动申请未释放: NIO 和 Netty 都会取 -XX:MaxDirectMemorySize 配置的值，来限制申请的堆外内存的大小
+原因二：通过 JNI 调用的 Native Code 申请的内存未释放: 通过 Google perftools + Btrace 等工具，帮助我们分析
+首先可以使用 NMT + jcmd 分析泄漏的堆外内存是哪里申请，确定原因后，使用不同的手段，进行原因定位。
+
+JNI 引发的 GC 问题: 添加 -XX+PrintJNIGCStalls 参数，可以打印出发生 JNI 调用时的线程，
+禁用偏向锁：偏向锁在只有一个线程使用到该锁的时候效率很高，但是在竞争激烈情况会升级成轻量级锁，此时就需要先消除偏向锁，这个过程是STW 的。
 ```
+### ZGC（The Z Garbage Collector）是 JDK 11 中推出的一款低延迟垃圾回收器
+```
+CMS 新生代的 Young GC、G1 和 ZGC 都基于标记 - 复制算法
+标记阶段停顿分析
+初始标记阶段：初始标记阶段是指从 GC Roots 出发标记全部直接子节点的过程，该阶段是 STW 的 (就遍历一层，快)
+并发标记阶段：并发标记阶段是指从 GC Roots 开始对堆中对象进行可达性分析，找出存活对象 （可达性分析，并发，慢）
+再标记阶段：重新标记那些在并发标记阶段发生变化的对象。该阶段是 STW 的 （？？？）
+
+清理阶段停顿分析
+清理阶段清点出有存活对象的分区和没有存活对象的分区，该阶段不会清理垃圾对象，也不会执行存活对象的复制。该阶段是 STW 的
+复制阶段停顿分析
+的转移阶段需要分配新内存和复制对象的成员变量。转移阶段是STW 的，其中内存分配通常耗时非常短，但对象成员变量的复制耗时有可能较长 （这个就跟redis大key似的）
+为什么转移阶段不能和标记阶段一样并发执行呢？
+主要是 G1 未能解决转移过程中准确定位对象地址的问题。
+G1 的 Young GC 和 CMS 的 Young GC，其标记 - 复制全过程 STW
+
+ZGC 在标记、转移和重定位阶段几乎都是并发的，这是 ZGC 实现停顿时间小于 10ms 目标的最关键原因
+ZGC 通过着色指针和读屏障技术，解决了转移过程中准确访问对象的问题，实现了并发转移。
+ZGC 有多种 GC 触发机制
+阻塞内存分配请求触发：当垃圾来不及回收，垃圾将堆占满时，会导致部分线程阻塞。
+基于分配速率的自适应算法：最主要的 GC 触发方式
+基于固定时间间隔：通过 ZCollectionInterval 控制，适合应对突增流量场景。
+主动触发规则：类似于固定间隔规则，但时间间隔不固定，是 ZGC 自行算出来的时机
+预热规则：服务刚启动时出现，一般不需要关注
+外部触发：代码中显式调用 System.gc() 触发
+元数据分配触发：元数据区不足时导致，一般不需要关注
+
+升级JDK11
+a. 一 些 类 被 删 除： 比 如“sun.misc.BASE64Encoder”， 找 到 替 换 类 java.util.Base64 即可。
+b. 组件依赖版本不兼容 JDK 11 问题：找到对应依赖组件，搜索最新版本，一般都支持 JDK 11。
+```
+### mybatis构建实现
+```
+SqlSession：作为 MyBatis 工作的主要顶层 API，表示和数据库交互的会话，完成必要数据库增删改查功能
+Executor：MyBatis 执行器，这是 MyBatis 调度的核心，负责 SQL 语句的生成和查询缓存的维护
+BoundSql：表示动态生成的 SQL 语句以及相应的参数信息
+StatementHandler： 封 装 了 JDBC Statement 操 作， 负 责 对 JDBCstatement 的操作，如设置参数、将 Statement 结果集转换成 List 集合等等
+ParameterHandler：负责对用户传递的参数转换成 JDBC Statement 所需要的参数
+TypeHandler：负责 Java 数据类型和 JDBC 数据类型之间的映射和转换
+```
+
+### [ES集群如何进行挨个重启?](https://elasticsearch.cn/question/4454)
 
 ## linux查看哪个进程占用磁盘IO  
 $ iotop -oP  
 命令的含义：只显示有I/O行为的进程  
 
+$ iostat -dtxNm 2 10
+查看磁盘io状况
+
+$ dstat -r -l -t --top-io
+用dstat命令看下io前几名的进程
+
+$ dstat --top-bio-adv
+找到那个进程占用IO最多
+
 $ pidstat -d 1  
 命令的含义：展示I/O统计，每秒更新一次  
+
+网络上的人提供了如下三种解决方案:
+
+升级内核
+更改commit的次数， "mount -o remount,commit=60 /dev/sda1"
+关闭文件系统日志功能: 操作类似于dumpe2fs 获取文件系统属性信息, tune2fs 调整文件系统属性, 之后e2fsck 检查文件系统(几乎大部分都不推荐这样做)
+当然这些方案，我一个都没有采纳，因为我突然想到今天服务器上似乎运行了许多IO操作很频繁的程序，jdb2的特点就是牺牲了性能保证了数据完整性，也就是说是我运行的程序太多让jdb2忙不过来了。
+
+因此我的最终解决方案就是，用kill把所有当前运行的高IO程序都干掉。最后解决了问题
 
 /Library/Java/JavaVirtualMachines/jdk-16.0.2.jdk/Contents/Home
 /Library/Java/JavaVirtualMachines/jdk-15.0.2.jdk/Contents/Home
