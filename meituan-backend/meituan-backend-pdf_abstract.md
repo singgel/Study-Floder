@@ -77,6 +77,14 @@
 6. CMS Old GC 频繁：判 断 当前 Old 区使用率是否大于阈值，则触发 CMS GC，默认为 92%。  
 7. 内存泄漏：Dump Diff 和 Leak Suspects 比较直观就
 
+### 堆外内存泄漏排查
+```
+-XX:NativeMemoryTracking=detail JVM 参数后重启项目
+jcmd 272662 VM.native_memory detail
+如果 total 中的 committed 和 top 中的 RES 相差不大，则应为主动申请的堆外内存
+未释放造成的，如果相差较大，则基本可以确定是 JNI 调用造成的
+```
+
 ## linux查看哪个进程占用磁盘IO  
 $ iotop -oP  
 命令的含义：只显示有I/O行为的进程  
@@ -137,3 +145,4 @@ java -Xms512M -Xmx512M -Xss1024K -XX:PermSize=256m -XX:MaxPermSize=512m  -cp Kaf
 nohup /home/op/KafkaOffsetMonitor/kafka-monitor-start.sh &
 
 jcmd 239312 GC.class_stats|awk '{print$13}'|sed 's/\(.*\)\.\(.*\)/\1/g'|sort |uniq -c|sort -nrk1
+
