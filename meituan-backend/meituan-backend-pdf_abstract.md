@@ -1,4 +1,6 @@
 # meituan-backend-pdf_abstract
+## [JVM源码](http://hg.openjdk.java.net/jdk8u)
+
 ## 2018
 ```
 ### netty堆外内存泄漏（netty-socketio）  
@@ -144,26 +146,66 @@ ParameterHandler：负责对用户传递的参数转换成 JDBC Statement 所需
 TypeHandler：负责 Java 数据类型和 JDBC 数据类型之间的映射和转换
 ```
 
-### [ES集群如何进行挨个重启?](https://elasticsearch.cn/question/4454)
+## 2020阿里
+### 如何正确地实现重试(Retry)
+```
+固定循环次数方式: 不带 backoff 的重试，对于下游来说会在失败发生时进一步遇到更多的请求压力，继而进一步恶化。
+带固定 delay 的方式: 
+虽然这次带了固定间隔的 backoff，但是每次重试的间隔固定，此时对于下游资源的冲击将会变成间歇性的脉冲；
+特别是当集群都遇到类似的问题时，步调一致的脉冲，将会最终对资源造成很大的冲击，并陷入失败的循环中。
+带随机 delay 的方式: 
+如果依赖的底层服务持续地失败，改方法依然会进行固定次数的尝试，并不能起到很好的保护作用。
+对结果是否符合预期，是否需要进行重试依赖于异常。
+无法针对异常进行精细化的控制，如只针部分异常进行重试。
+可进行细粒度控制的重试:
+推荐使用 resilience4j-retr y 或则spring-retry 等库来进行组合
+
+和断路器结合
+虽然可以比较好的控制重试策略，但是对于下游资源持续性的失败，依然没有很好的解决。当持续的失败时，对下游也会造成持续性的压力。
+常见的有 Hystrix 或 resilience4
+```
 
 ## linux查看哪个进程占用磁盘IO  
+$vmstat 2  
+执行vmstat命令，可以看到r值和b值较高，r 表示运行和等待cpu时间片的进程数，如果长期大于1，说明cpu不足，需要增加cpu。  
+b 表示在等待资源的进程数，比如正在等待I/O、或者内存交换等。
+
+### [IO等待导致性能下降](https://serverfault.com/questions/363355/io-wait-causing-so-much-slowdown-ext4-jdb2-at-99-io-during-mysql-commit)
 $ iotop -oP  
 命令的含义：只显示有I/O行为的进程  
 
-$ iostat -dtxNm 2 10
+$ iostat -dtxNm 2 10  
 查看磁盘io状况
 
-$ dstat -r -l -t --top-io
+$ dstat -r -l -t --top-io  
 用dstat命令看下io前几名的进程
 
-$ dstat --top-bio-adv
+$ dstat --top-bio-adv  
 找到那个进程占用IO最多
 
 $ pidstat -d 1  
 命令的含义：展示I/O统计，每秒更新一次  
 
-网络上的人提供了如下三种解决方案:
+### [Linux 挂载管理(mount)](https://www.cnblogs.com/chenmh/p/5097530.html)
+$ vim /etc/fstab  
+mount挂载分区在系统重启之后需要重新挂载，修改/etc/fstab文件可使挂载永久生效
 
+$ mount -t ext4 /dev/sdb1 /sdb1  
+-t:指定文件系统类型
+
+$ mount -o remount,noatime,data=writeback,barrier=0,nobh /dev/sdb  
+remount:重新挂载文件系统。
+noatime:每次访问文件时不更新文件的访问时间。
+async:适用缓存，默认方式。
+
+$ fuser -m /dev/sdb  
+查看文件系统占用的进程
+
+$ lsof /dev/sdb  
+查看正在被使用的文件，losf命令是list open file的缩写
+
+
+网络上的人提供了如下三种解决方案:
 升级内核
 更改commit的次数， "mount -o remount,commit=60 /dev/sda1"
 关闭文件系统日志功能: 操作类似于dumpe2fs 获取文件系统属性信息, tune2fs 调整文件系统属性, 之后e2fsck 检查文件系统(几乎大部分都不推荐这样做)
@@ -181,6 +223,18 @@ PUT _all/_settings
 "index.translog.flush_threshold_size" : "1024mb",
 "index.translog.sync_interval" : "60s",
 "index.refresh_interval" : "60s"
+}
+
+PUT /_cluster/settings
+{
+  "transient": {
+    "cluster": {
+      "routing": {
+        "allocation.disk.watermark.high": "95%",
+        "allocation.disk.watermark.low": "90%"
+      }
+    }
+  }
 }
 
 PUT _cluster/settings
@@ -225,3 +279,38 @@ nohup /home/op/KafkaOffsetMonitor/kafka-monitor-start.sh &
 
 jcmd 239312 GC.class_stats|awk '{print$13}'|sed 's/\(.*\)\.\(.*\)/\1/g'|sort |uniq -c|sort -nrk1
 
+"logging_ad-guard_*",
+"logging_usercenter-profile-api_*",
+"logging_bigdata-aibo-query_*",
+"logging_ad-shield-cloud_*",
+"logging_bigdata-queryplatform_*",
+"logging_xueqiu-sms_*",
+"logging_ad-merger-cloud_*",
+"logging_bigdata-push_*",
+"logging_ad-auth_*",
+"logging_bigdata-label-platform_*",
+"logging_ad-business_*",
+"logging_usercenter-profile-server_*",
+"logging_usercenter-passport-api_*",
+"logging_snowflake-nebula_*",
+"logging_xueqiu-analysis_*",
+"logging_xueqiu-push-client_*",
+"logging_recommend-stock-page-consumer_*",
+"logging_ad-gateway_*",
+"logging_recommend-user-profile-consumer_*",
+"logging_status-frame-thread_*",
+"logging_usercenter-relation-server_*",
+"logging_snowcrawler_*",
+"logging_live-crm_*",
+"logging_ad-ssp-cloud_*",
+"logging_cube-thread_*",
+"logging_search-query_*",
+"logging_recommend-user-profile_*",
+"logging_cube-server_*",
+"logging_usercenter-extend-server_*",
+"logging_bigdata-authority-platform_*",
+"logging_ad-report_*",
+"logging_status-cds_*",
+"logging_message-group_*",
+"logging_ad-resource_*",
+"logging_ad-oplog_*"
