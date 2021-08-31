@@ -164,7 +164,8 @@ TypeHandler：负责 Java 数据类型和 JDBC 数据类型之间的映射和转
 虽然可以比较好的控制重试策略，但是对于下游资源持续性的失败，依然没有很好的解决。当持续的失败时，对下游也会造成持续性的压力。
 常见的有 Hystrix 或 resilience4
 ```
-### DDD领域设计
+### 阿里技术专家详解 DDD 系列
+#### DDD Domain Primitive
 ```
 Domain Primitive 是一个在特定领域里，拥有精准定义的、可自我验证的、拥有行为的 Value Object
 DP 的第一个原则：将隐性的概念显性化  
@@ -186,8 +187,9 @@ Double 或 BigDecimal：一般用到的 Double 或 BigDecimal 都是有业务含
 复杂的数据结构：比如 Map<String, List<Integer>> 等，尽量能把 Map 的所有操作包装掉，仅暴露必要行为。
 
 所有抽离出来的方法要做到无状态, DP 本身不能带状态，所以一切需要改变状态的代码都不属于 DP 的范畴。
-
-*应用架构*
+```
+#### DDD 应用架构
+```
 可维护性 = 当依赖变化时，有多少代码需要随之改变
 eg：
     数据结构的不稳定性
@@ -235,8 +237,31 @@ ACL 不仅仅只是多了一层调用：通过在系统间加入一个防腐层�
 又被称之为 Ports and Adapters（端口和适配器架构）
 UI 层、DB 层、和各种中间件层实际上是没有本质上区别的，都只是数据的输入和输出，而不是在传统架构中的最上层和最下层。
 ```
+#### DDD Repository 模式
+```
+Anemic Domain Model（贫血领域模型）
+而 2006 年的 JPA 标准，通过@Entity 等注解，以及 Hibernate 等 ORM 框架的实现，
+让很多 Java 开发对 Entity 的理解停留在了数据映射层面，忽略了 Entity 实体的本身行为
+eg:
+  1. 有大量的 XxxDO 对象
+  2. 服务和 Controller 里有大量的业务逻辑
+  3. 大量的 Utils 工具类等。
+Repository 的价值
+  能够隔离我们的软件（业务逻辑）和固件/硬件（DAO、DB），
+  让我们的软件变得更加健壮，而这个就是 Repository 的核心价值。
+手写 Assembler/Converter 是一件耗时且容易出 bug 的事情
+  MapStruct
 
-阿里技术专家详解 DDD 系列
+```
+#### DDD 领域层设计规范
+```
+OOP （Object-Oriented Programming）面对对象程序设计实现
+  一个比较简单的实现是通过类的继承关系
+  对象继承导致代码强依赖父类逻辑，违反开闭原则 Open-Closed Principle（OCP）最核心的原因就是一个现有逻辑的变更可能会影响一些原有的代码
+目前领域事件的缺陷和展望
+    和消息队列中间件不同的是，领域事件通常是立即执行的、在同一个进程内、可能是同步或异步。
+    但会侵入实体本身，同时也需要比较啰嗦的显性在调用方dispatch 事件，也不是一个好的解决方案。
+```
 
 ## linux查看哪个进程占用磁盘IO  
 $ vmstat 2  
