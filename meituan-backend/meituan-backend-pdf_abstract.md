@@ -164,9 +164,82 @@ TypeHandler：负责 Java 数据类型和 JDBC 数据类型之间的映射和转
 虽然可以比较好的控制重试策略，但是对于下游资源持续性的失败，依然没有很好的解决。当持续的失败时，对下游也会造成持续性的压力。
 常见的有 Hystrix 或 resilience4
 ```
+### DDD领域设计
+```
+Domain Primitive 是一个在特定领域里，拥有精准定义的、可自我验证的、拥有行为的 Value Object
+DP 的第一个原则：将隐性的概念显性化  
+eg: PhoneNumber 类的一个计算属性 getAreaCode
+
+DP 的第二、三个原则：将隐性的上下文显性化、封装多对象行为
+eg: 通过将默认货币这个隐性的上下文概念显性化，并且和金额合并为 Money ，我们可以避免很多当前看不出来，但未来可能会暴雷的 bug
+eg: ExchangeRate 汇率对象，通过封装金额计算逻辑以及各种校验逻辑，让原始代码变得极其简单
+
+让隐性的概念显性化
+让隐性的上下文显性化
+封装多对象行为
+
+常见的 DP 的使用场景包括:
+有格式限制的 String：比如 Name，PhoneNumber，OrderNumber，ZipCode，Address 等。
+有限制的 Integer：比如 OrderId（>0），Percentage（0-100%），Quantity（>=0）等。
+可枚举的 int ：比如 Status（一般不用 Enum 因为反序列化问题）。
+Double 或 BigDecimal：一般用到的 Double 或 BigDecimal 都是有业务含义的，比如 Temperature、Money、Amount、ExchangeRate、Rating 等。
+复杂的数据结构：比如 Map<String, List<Integer>> 等，尽量能把 Map 的所有操作包装掉，仅暴露必要行为。
+
+所有抽离出来的方法要做到无状态, DP 本身不能带状态，所以一切需要改变状态的代码都不属于 DP 的范畴。
+
+*应用架构*
+可维护性 = 当依赖变化时，有多少代码需要随之改变
+eg：
+    数据结构的不稳定性
+    依赖库的升级
+    第三方服务依赖的不确定性
+    第三方服务 API 的接口变化
+    中间件更换
+可扩展性 = 做新需求或改逻辑时，需要新增/修改多少代码
+eg：
+    数据来源被固定、数据格式不兼容
+    业务逻辑无法复用
+    逻辑和数据存储的相互依赖
+可测试性 = 运行每个测试用例所花费的时间 * 每个需求所需要增加的测试用例数量
+eg：
+    设施搭建困难
+    运行耗时长
+    耦合度高
+
+单一性原则（Single Responsibility Principle）：
+依赖反转原则（Dependency Inversion Principle）：
+开放封闭原则（Open Closed Principle）：
+
+*重构方案*
+抽象数据存储层
+Data Object 数据类：，从数据库来的都应该先直接映射到 DO 上，但是代码里应该完全避免直接操作 DO。
+Entity 实体类：Domain Primitive 代替，可以避免大量的校验代码等。
+Repository 对应的是 Entity 对象读取储存的抽象，在接口层面做统一，不关注底层实现。通过 Builder/Factory 对象实现 AccountDO 到 Account 之间的转化。
+
+抽象第三方服务
+Anti-Corruption Layer（防腐层或 ACL）
+很多时候我们的系统会去依赖其他的系统，而被依赖的系统可能包含不合理的数据结构、API、协议或技术实现，如果对外部系统强依赖，会导致我们的系统被”腐蚀“。
+ACL 不仅仅只是多了一层调用：通过在系统间加入一个防腐层，能够有效的隔离外部依赖和内部逻辑，无论外部如何变更，内部代码可以尽可能的保持不变。
+适配器：
+缓存：
+兜底：
+易于测试：
+功能开关：
+
+抽象中间件（简单就是KafkaTemplate别直接用）
+用 Domain Primitive 封装跟实体无关的无状态计算逻辑
+用 Entity 封装单对象的有状态的行为，包括业务校验
+用 Domain Service 封装多对象逻辑
+
+*DDD 的六边形架构*
+又被称之为 Ports and Adapters（端口和适配器架构）
+UI 层、DB 层、和各种中间件层实际上是没有本质上区别的，都只是数据的输入和输出，而不是在传统架构中的最上层和最下层。
+```
+
+阿里技术专家详解 DDD 系列
 
 ## linux查看哪个进程占用磁盘IO  
-$vmstat 2  
+$ vmstat 2  
 执行vmstat命令，可以看到r值和b值较高，r 表示运行和等待cpu时间片的进程数，如果长期大于1，说明cpu不足，需要增加cpu。  
 b 表示在等待资源的进程数，比如正在等待I/O、或者内存交换等。
 
@@ -219,10 +292,11 @@ $ lsof /dev/sdb
 
 PUT _all/_settings
 {
-"index.translog.durability" : "async",
-"index.translog.flush_threshold_size" : "1024mb",
-"index.translog.sync_interval" : "60s",
-"index.refresh_interval" : "60s"
+    "index.translog.durability" : "async",
+    "index.translog.flush_threshold_ops" : 50000
+    "index.translog.flush_threshold_size" : "1024mb",
+    "index.translog.sync_interval" : "60s",
+    "index.refresh_interval" : "60s"
 }
 
 PUT /_cluster/settings
@@ -244,6 +318,14 @@ PUT _cluster/settings
   }
 }
 
+PUT _cluster/settings
+{
+    "persistent" : {
+        "indices.store.throttle.max_bytes_per_sec" : "100mb"
+    }
+}
+
+curl -XPOST http://127.0.0.1:9200/logstash-2015-06.10/_forcemerge?max_num_segments=1
 
 /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server 172.16.1.15:9092,172.16.1.16:9092 --topic xueqiu-push-req --from-beginning --property print.key=true|grep 39171676469
 
@@ -267,16 +349,9 @@ PUT _cluster/settings
 
 /home/op/kafka_2.13-2.8.0/bin/kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list 10.10.22.7:9092 --topic stock_view_recently --time -1
 /home/op/kafka_2.13-2.8.0/bin/kafka-consumer-offset-checker.sh --zookeeper 10.10.31.9:2181 --topic stock_view_recently  --group stock_follower
+
+
 cat ./grpc.log |sed -n  '/2021-03-19 14:00:00.*/,/2021-03-19 14:10:00.*/p' |grep prePay | awk -F '|' '{if ($6>2000) print $6}'
-
-java -Xms512M -Xmx512M -Xss1024K -XX:PermSize=256m -XX:MaxPermSize=512m  -cp KafkaOffsetMonitor-assembly-0.2.0.jar com.quantifind.kafka.offsetapp.OffsetGetterWeb \
---port 8088 \
---zk 10.10.31.9:2181,10.10.36.7:2181,10.10.37.7:2181 \
---refresh 5.minutes \
---retain 1.day >/dev/null 2>&1;
-
-nohup /home/op/KafkaOffsetMonitor/kafka-monitor-start.sh &
-
 jcmd 239312 GC.class_stats|awk '{print$13}'|sed 's/\(.*\)\.\(.*\)/\1/g'|sort |uniq -c|sort -nrk1
 
 "logging_ad-guard_*",
