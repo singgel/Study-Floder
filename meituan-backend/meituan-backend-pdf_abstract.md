@@ -2,8 +2,10 @@
 ## [JVM源码](http://hg.openjdk.java.net/jdk8u)
 
 ## 2018
-```
+### [可用性理解](https://tech.meituan.com/2018/04/19/trade-high-availability-in-action.html)
+
 ### netty堆外内存泄漏（netty-socketio）  
+```
 1. 一次 Connect 和 Disconnect 为一次连接的建立与关闭  
 2. 在 Disconnect事件前后申请的内存并没有释放(DIRECT_MEMORY_COUNTER堆外统计字段)  
 3. 断点打在client.send() 这行， 然后关闭客户端连接，之后直接进入到这个方法，有个逻辑 encoder.allocateBuffer申请堆外内存  
