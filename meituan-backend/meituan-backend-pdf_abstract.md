@@ -2,7 +2,7 @@
 ## [JVM源码](http://hg.openjdk.java.net/jdk8u)
 
 ## 2018
-### [可用性理解](https://tech.meituan.com/2018/04/19/trade-high-availability-in-action.html)
+### [SLA稳定性理解](https://tech.meituan.com/2018/04/19/trade-high-availability-in-action.html)
 
 ### netty堆外内存泄漏（netty-socketio）  
 ```
