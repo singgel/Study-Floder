@@ -302,14 +302,15 @@ $ fuser -m /dev/sdb
 $ lsof /dev/sdb  
 查看正在被使用的文件，losf命令是list open file的缩写
 
+### [Mac中的一些网络命令](https://tonydeng.github.io/2016/07/07/use-lsof-to-replace-netstat/)
+$ lsof -itcp -n
+当前用户名下启动的链接数
 
-网络上的人提供了如下三种解决方案:
-升级内核
-更改commit的次数， "mount -o remount,commit=60 /dev/sda1"
-关闭文件系统日志功能: 操作类似于dumpe2fs 获取文件系统属性信息, tune2fs 调整文件系统属性, 之后e2fsck 检查文件系统(几乎大部分都不推荐这样做)
-当然这些方案，我一个都没有采纳，因为我突然想到今天服务器上似乎运行了许多IO操作很频繁的程序，jdb2的特点就是牺牲了性能保证了数据完整性，也就是说是我运行的程序太多让jdb2忙不过来了。
+$ lsof -itcp -stcp:listen
+当前用户名下监听的端口
 
-因此我的最终解决方案就是，用kill把所有当前运行的高IO程序都干掉。最后解决了问题
+$ netstat -antvp tcp
+使用 netstat 命令查看连接数
 
 /Library/Java/JavaVirtualMachines/jdk-16.0.2.jdk/Contents/Home
 /Library/Java/JavaVirtualMachines/jdk-15.0.2.jdk/Contents/Home
@@ -375,42 +376,5 @@ curl -XPOST http://127.0.0.1:9200/logstash-2015-06.10/_forcemerge?max_num_segmen
 /home/op/kafka_2.13-2.8.0/bin/kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list 10.10.22.7:9092 --topic stock_view_recently --time -1
 /home/op/kafka_2.13-2.8.0/bin/kafka-consumer-offset-checker.sh --zookeeper 10.10.31.9:2181 --topic stock_view_recently  --group stock_follower
 
-
 cat ./grpc.log |sed -n  '/2021-03-19 14:00:00.*/,/2021-03-19 14:10:00.*/p' |grep prePay | awk -F '|' '{if ($6>2000) print $6}'
 jcmd 239312 GC.class_stats|awk '{print$13}'|sed 's/\(.*\)\.\(.*\)/\1/g'|sort |uniq -c|sort -nrk1
-
-"logging_ad-guard_*",
-"logging_usercenter-profile-api_*",
-"logging_bigdata-aibo-query_*",
-"logging_ad-shield-cloud_*",
-"logging_bigdata-queryplatform_*",
-"logging_xueqiu-sms_*",
-"logging_ad-merger-cloud_*",
-"logging_bigdata-push_*",
-"logging_ad-auth_*",
-"logging_bigdata-label-platform_*",
-"logging_ad-business_*",
-"logging_usercenter-profile-server_*",
-"logging_usercenter-passport-api_*",
-"logging_snowflake-nebula_*",
-"logging_xueqiu-analysis_*",
-"logging_xueqiu-push-client_*",
-"logging_recommend-stock-page-consumer_*",
-"logging_ad-gateway_*",
-"logging_recommend-user-profile-consumer_*",
-"logging_status-frame-thread_*",
-"logging_usercenter-relation-server_*",
-"logging_snowcrawler_*",
-"logging_live-crm_*",
-"logging_ad-ssp-cloud_*",
-"logging_cube-thread_*",
-"logging_search-query_*",
-"logging_recommend-user-profile_*",
-"logging_cube-server_*",
-"logging_usercenter-extend-server_*",
-"logging_bigdata-authority-platform_*",
-"logging_ad-report_*",
-"logging_status-cds_*",
-"logging_message-group_*",
-"logging_ad-resource_*",
-"logging_ad-oplog_*"
