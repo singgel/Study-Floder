@@ -314,6 +314,8 @@ $ lsof -itcp -stcp:listen
 $ netstat -antvp tcp
 使用 netstat 命令查看连接数
 
+### [Linux网络监控工具大全](https://baijiahao.baidu.com/s?id=1683499342813958473&wfr=spider&for=pc)
+
 /Library/Java/JavaVirtualMachines/jdk-16.0.2.jdk/Contents/Home
 /Library/Java/JavaVirtualMachines/jdk-15.0.2.jdk/Contents/Home
 /Library/Java/JavaVirtualMachines/jdk-9.0.4.jdk/Contents/Home
